@@ -168,7 +168,7 @@
 
 	static __inline ioinfo ** setPioInfo();
 
-	static ioinfo ** __pioinfo = setPioInfo();
+	static ioinfo ** __pioinfo = NULL;
 	static size_t pioinfo_extra = 0;
 
 	static inline ioinfo* _tpioinfo(ioinfo ** pioinfo, int fd)
@@ -182,6 +182,10 @@
 
 	static inline ioinfo* _pioinfo(int fd)
 	{
+		if (__pioinfo == NULL)
+		{
+			__pioinfo = setPioInfo();
+		}
 		return _tpioinfo(__pioinfo, fd);
 	}
 
@@ -230,6 +234,7 @@
 	#if _WIN64
 		/* add         rsp,stacksize */
 	#define FUNC_CLEAR_STACK "\x48\x83\xc4"
+	#define FUNC_CLEAR_STACK_2 "\x48\x83\xc4"
 		/* ret */
 	#define FUNC_RET "\xC3"
 	#define CLEAR_STACK_PARAM_BYTES 1
@@ -244,6 +249,7 @@
 		/* mov         esp, ebp */
 		/* pop         ebp */
 	#define FUNC_CLEAR_STACK "\x8B\xE5\x5D"
+	#define FUNC_CLEAR_STACK_2 "\x5F\x5E\x59\x5D"
 		/* ret */
 	#define FUNC_RET "\xC3"
 	#define CLEAR_STACK_PARAM_BYTES 0
@@ -253,6 +259,12 @@
 		for (pFuncEnd = pFuncStart + CLEAR_STACK_PARAM_BYTES + sizeof FUNC_CLEAR_STACK - 1; pFuncEnd < pFuncStart + 0x300; pFuncEnd++)
 		{
 			if (memcmp(pFuncEnd, FUNC_RET, sizeof FUNC_RET - 1) == 0 && memcmp(pFuncEnd - CLEAR_STACK_PARAM_BYTES - sizeof FUNC_CLEAR_STACK + 1, FUNC_CLEAR_STACK, sizeof FUNC_CLEAR_STACK - 1) == 0)
+			{
+				pFuncEnd += (sizeof FUNC_RET - 2);
+				foundRet = TRUE;
+				break;
+			}
+			else if (memcmp(pFuncEnd, FUNC_RET, sizeof FUNC_RET - 1) == 0 && memcmp(pFuncEnd - CLEAR_STACK_PARAM_BYTES - sizeof FUNC_CLEAR_STACK_2 + 1, FUNC_CLEAR_STACK_2, sizeof FUNC_CLEAR_STACK_2 - 1) == 0)
 			{
 				pFuncEnd += (sizeof FUNC_RET - 2);
 				foundRet = TRUE;

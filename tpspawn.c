@@ -645,7 +645,20 @@ static BOOL getLpReserved2(LPBYTE FAR *lpReserved2, WORD FAR *cbReserved2, WORD 
 #elif defined (__MINGW32__) && defined (__MSVCRT__)
 	lastHandle = _nhandle;
 #elif _MSC_VER
-	lastHandle = (((IOINFO_ARRAYS >> IOINFO_L2E) - 1) << IOINFO_L2E);
+	#if _MSC_VER >= 1900
+	if (__pioinfo == NULL)
+	{
+		__pioinfo = setPioInfo();
+	}
+	#endif
+	lastHandle = 0;
+	for(lastHandle = IOINFO_ARRAYS; lastHandle > 0 && __pioinfo[lastHandle - 1] == NULL; lastHandle--)
+	{
+	}
+	if(lastHandle > 0)
+	{
+		lastHandle = ((lastHandle - 1) << IOINFO_L2E) + IOINFO_ARRAY_ELTS - 1;
+	}
 #else
 	#error unsupported.
 #endif
