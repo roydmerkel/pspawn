@@ -1,5 +1,6 @@
 #include "pspawn.h"
 #include "strFuncs.h"
+#include "errFuncs.h"
 #include "ioinfo.h"
 #include <stdarg.h>
 #include <errno.h>
@@ -15,6 +16,17 @@
 #ifndef _O_WTEXT
 #define _O_WTEXT        0x10000 /* file mode is UTF16 (translated) */
 #endif
+
+#if _MSC_VER < 1000
+typedef size_t SIZE_T;
+#endif
+
+#ifndef INVALID_FILE_ATTRIBUTES
+#define INVALID_FILE_ATTRIBUTES (DWORD)(-1)
+#endif
+
+typedef BOOL (*PSetHandleInformation)(HANDLE hObject, DWORD  dwMask, DWORD  dwFlags);
+typedef BOOL (FAR * LPSetHandleInformation)(HANDLE hObject, DWORD  dwMask, DWORD  dwFlags);
 
 static BOOL hasExt(LPCTSTR arg)
 {
@@ -154,7 +166,7 @@ static BOOL findExt(LPCTSTR arg,  LPTSTR outPath, DWORD bufSize)
 
 	if(hasExt(arg))
 	{
-		if(_taccess(arg, 0) == 0)
+		if(GetFileAttributes(arg) != INVALID_FILE_ATTRIBUTES)
 		{
 			// found.
 			for(outPathPtr = outPath, argPtr = arg; *argPtr && outPathPtr < outPathEndPtr; outPathPtr++, argPtr++)
@@ -172,6 +184,7 @@ static BOOL findExt(LPCTSTR arg,  LPTSTR outPath, DWORD bufSize)
 				errno = ENOMEM;
 			}
 		}
+		dosmaperr(GetLastError());
 	}
 	else
 	{
@@ -211,11 +224,12 @@ static BOOL findExt(LPCTSTR arg,  LPTSTR outPath, DWORD bufSize)
 				if(*pathExtPtr == _T(';'))
 				{
 					*outPathPtr = _T('\0');
-					if(_taccess(outPath, 0) == 0)
+					if(GetFileAttributes(outPath) != INVALID_FILE_ATTRIBUTES)
 					{
 						res = TRUE;
 						break;
 					}
+					dosmaperr(GetLastError());
 
 					outPathPtr = outPathNullPtr;
 					*outPathPtr = _T('\0');
@@ -234,12 +248,13 @@ static BOOL findExt(LPCTSTR arg,  LPTSTR outPath, DWORD bufSize)
 			if(res == FALSE)
 			{
 				*outPathPtr = _T('\0');
-				if(_taccess(outPath, 0) == 0)
+				if(GetFileAttributes(outPath) != INVALID_FILE_ATTRIBUTES)
 				{
 					res = TRUE;
 				}
 				else
 				{
+					dosmaperr(GetLastError());
 					if(errno == 0 || errno == ENOENT)
 					{
 						errno = ENOENT;
@@ -645,20 +660,24 @@ static BOOL getLpReserved2(LPBYTE FAR *lpReserved2, WORD FAR *cbReserved2, WORD 
 #elif defined (__MINGW32__) && defined (__MSVCRT__)
 	lastHandle = _nhandle;
 #elif _MSC_VER
-	#if _MSC_VER >= 1900
-	if (__pioinfo == NULL)
-	{
-		__pioinfo = setPioInfo();
-	}
+	#if _MSC_VER >= 1000
+		#if _MSC_VER >= 1900
+		if (__pioinfo == NULL)
+		{
+			__pioinfo = setPioInfo();
+		}
+		#endif
+		lastHandle = 0;
+		for(lastHandle = IOINFO_ARRAYS; lastHandle > 0 && __pioinfo[lastHandle - 1] == NULL; lastHandle--)
+		{
+		}
+		if(lastHandle > 0)
+		{
+			lastHandle = ((lastHandle - 1) << IOINFO_L2E) + IOINFO_ARRAY_ELTS - 1;
+		}
+	#else
+		lastHandle = _nhandle - 1;
 	#endif
-	lastHandle = 0;
-	for(lastHandle = IOINFO_ARRAYS; lastHandle > 0 && __pioinfo[lastHandle - 1] == NULL; lastHandle--)
-	{
-	}
-	if(lastHandle > 0)
-	{
-		lastHandle = ((lastHandle - 1) << IOINFO_L2E) + IOINFO_ARRAY_ELTS - 1;
-	}
 #else
 	#error unsupported.
 #endif
@@ -705,6 +724,14 @@ static BOOL getLpReserved2(LPBYTE FAR *lpReserved2, WORD FAR *cbReserved2, WORD 
 
 	for(curHandle = 0; curHandle < lastHandle; curHandle++)
 	{
+#if defined(_MSC_VER) && _MSC_VER < 1000
+		if((_osfile(curHandle) & FOPEN) != 0 && (_osfile(curHandle) & FNOINHERIT) == 0 &&
+			_osfhnd(curHandle) && _osfhnd(curHandle) != (intptr_t)INVALID_HANDLE_VALUE)
+		{
+			*posfile = _osfile(curHandle);
+			*posfhnd = _osfhnd(curHandle);
+		}
+#else
 		ioinfo *info = _pioinfo(curHandle);
 
 		if(info && (info->osfile & FOPEN) != 0 && (info->osfile & FNOINHERIT) == 0 &&
@@ -713,6 +740,7 @@ static BOOL getLpReserved2(LPBYTE FAR *lpReserved2, WORD FAR *cbReserved2, WORD 
 			*posfile = info->osfile;
 			*posfhnd = info->osfhnd;
 		}
+#endif
 		else
 		{
 			*posfile = 0;
@@ -831,6 +859,12 @@ HANDLE __cdecl ptspawnve(
 	HANDLE g_hChildStd_OUT_Wr = NULL;
 	HANDLE g_hChildStd_ERR_Rd = NULL;
 	HANDLE g_hChildStd_ERR_Wr = NULL;
+	HMODULE hKernel32 = GetModuleHandle(_T("KERNEL32"));
+	FARPROC pSetHandleInformation = NULL;
+	if(hKernel32)
+	{
+		pSetHandleInformation = GetProcAddress(hKernel32, "SetHandleInformation");
+	}
 
 	if(!findExt(filename, outBuf, sizeof outBuf))
 	{
@@ -876,7 +910,7 @@ HANDLE __cdecl ptspawnve(
 			return INVALID_HANDLE_VALUE;
 		}
 
-		if ( ! SetHandleInformation(g_hChildStd_IN_Wr, HANDLE_FLAG_INHERIT, 0) )
+		if (pSetHandleInformation && ! (*pSetHandleInformation)(g_hChildStd_IN_Wr, HANDLE_FLAG_INHERIT, 0) && GetLastError() != ERROR_CALL_NOT_IMPLEMENTED )
 		{
 			LocalFree(lpReserved2);
 			lpReserved2 = NULL;
@@ -908,7 +942,7 @@ HANDLE __cdecl ptspawnve(
 			return INVALID_HANDLE_VALUE;
 		}
 
-		if ( ! SetHandleInformation(g_hChildStd_OUT_Rd, HANDLE_FLAG_INHERIT, 0) )
+		if (pSetHandleInformation && ! (*pSetHandleInformation)(g_hChildStd_OUT_Rd, HANDLE_FLAG_INHERIT, 0) && GetLastError() != ERROR_CALL_NOT_IMPLEMENTED )
 		{
 			LocalFree(lpReserved2);
 			lpReserved2 = NULL;
@@ -950,8 +984,9 @@ HANDLE __cdecl ptspawnve(
 			return INVALID_HANDLE_VALUE;
 		}
 
-		if ( ! SetHandleInformation(g_hChildStd_ERR_Rd, HANDLE_FLAG_INHERIT, 0) )
+		if (pSetHandleInformation && ! (*pSetHandleInformation)(g_hChildStd_ERR_Rd, HANDLE_FLAG_INHERIT, 0) && GetLastError() != ERROR_CALL_NOT_IMPLEMENTED )
 		{
+			DWORD error = GetLastError();
 			LocalFree(lpReserved2);
 			lpReserved2 = NULL;
 			if(ppipestdin)

@@ -455,10 +455,6 @@
 
 	#define _osfile(i)  ( _osfile[i] )
 
-	#endif
-
-	#endif  /* _WIN32 */
-
 	/*
 	 * Current number of allocated ioinfo structures (_NHANDLE_ is the upper
 	 * limit).
@@ -471,6 +467,9 @@
 	}
 #endif
 
+	#endif
+
+	#endif  /* _WIN32 */
 #else
 #error unsupported.
 #endif
