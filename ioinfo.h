@@ -151,7 +151,7 @@
 	typedef char lowio_text_mode;
 	typedef char lowio_pipe_lookahead[3];
 
-	typedef struct {
+	typedef struct ioinfo {
 		CRITICAL_SECTION           lock;
 		intptr_t                   osfhnd;          // underlying OS file HANDLE
 		__int64                    startpos;        // File position that matches buffer start
@@ -164,7 +164,6 @@
 		BYTE dbcsBufferUsed : 1; // Is the dbcsBuffer in use?
 		char    dbcsBuffer;           // Buffer for the lead byte of DBCS when converting from DBCS to Unicode
 	} ioinfo;
-	typedef struct ioinfo ioinfo;
 
 	#define IOINFO_ARRAY_ELTS   (1 << IOINFO_L2E)
 

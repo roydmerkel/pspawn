@@ -622,7 +622,7 @@ static BOOL createArg(LPCTSTR const FAR * argv, TCHAR FAR * buf, SIZE_T buf_size
 	return TRUE;
 }
 
-static BOOL getLpReserved2(LPBYTE FAR *lpReserved2, WORD FAR *cbReserved2, WORD FAR *nh, CHAR FAR * FAR * osfile, intptr_t FAR * UNALIGNED FAR *osfhnd)
+static BOOL getLpReserved2(LPBYTE FAR *lpReserved2, WORD FAR *cbReserved2, WORD FAR *nh, CHAR FAR * FAR * osfile, intptr_t UNALIGNED FAR * FAR *osfhnd)
 {
 	int lastHandle;
 	int curHandle;
