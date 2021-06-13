@@ -88,6 +88,9 @@
 	// 'semi-documented' defines:
 	#  define IOINFO_L2E          5
 	#  define IOINFO_ARRAY_ELTS   (1 << IOINFO_L2E)
+	#  define IOINFO_ARRAYS       64
+
+	#  define _NHANDLE_           (IOINFO_ARRAYS * IOINFO_ARRAY_ELTS)
 	#  define _pioinfo(i) ( __pioinfo[(i) >> IOINFO_L2E] + \
 							((i) & (IOINFO_ARRAY_ELTS - 1)) )
 							
@@ -101,14 +104,21 @@
 		CRITICAL_SECTION lock;
 		#  endif
 	};
+	typedef struct ioinfo ioinfo;
 		
 	#if defined(__cplusplus)
 	extern "C" {
 	#endif
-		__MINGW_IMPORT ioinfo * __pioinfo[];
+		__MINGW_IMPORT struct ioinfo * __pioinfo[];
 	#if defined(__cplusplus)
 	}
 	#endif
+
+	#define _osfhnd(i)  ( (_pioinfo(i)) ? _pioinfo(i)->osfhnd : NULL )
+
+	#define _osfile(i)  ( (_pioinfo(i)) ? _pioinfo(i)->osfile : 0)
+
+	#define _pipech(i)  ( (_pioinfo(i)) ? _pioinfo(i)->pipech : 0)
 	
 #elif defined(_MSC_VER)
 	#if !defined (_W64)
@@ -154,6 +164,7 @@
 		BYTE dbcsBufferUsed : 1; // Is the dbcsBuffer in use?
 		char    dbcsBuffer;           // Buffer for the lead byte of DBCS when converting from DBCS to Unicode
 	} ioinfo;
+	typedef struct ioinfo ioinfo;
 
 	#define IOINFO_ARRAY_ELTS   (1 << IOINFO_L2E)
 
@@ -166,21 +177,21 @@
 
 	#define IOINFO_L2E          6
 
-	static __inline ioinfo ** setPioInfo();
+	static __inline struct ioinfo ** setPioInfo();
 
-	static ioinfo ** __pioinfo = NULL;
+	static struct ioinfo ** __pioinfo = NULL;
 	static size_t pioinfo_extra = 0;
 
-	static inline ioinfo* _tpioinfo(ioinfo ** pioinfo, int fd)
+	static inline struct ioinfo* _tpioinfo(struct ioinfo ** pioinfo, int fd)
 	{
-		const size_t sizeof_ioinfo = sizeof(ioinfo) + pioinfo_extra;
-		return (ioinfo*)((char*)pioinfo[fd >> IOINFO_L2E] +
+		const size_t sizeof_ioinfo = sizeof(struct ioinfo) + pioinfo_extra;
+		return (struct ioinfo*)((char*)pioinfo[fd >> IOINFO_L2E] +
 			(fd & (IOINFO_ARRAY_ELTS - 1)) * sizeof_ioinfo);
 	}
 
 	#define _tosfhnd(pioinfo, i)  ( _tpioinfo(pioinfo, i)->osfhnd )
 
-	static inline ioinfo* _pioinfo(int fd)
+	static inline struct ioinfo* _pioinfo(int fd)
 	{
 		if (__pioinfo == NULL)
 		{
@@ -209,7 +220,7 @@
 
 	#define _dbcsBufferUsed(i) ( _pioinfo(i)->dbcsBufferUsed )
 
-	static __inline ioinfo ** setPioInfo()
+	static __inline struct ioinfo ** setPioInfo()
 	{
 		HMODULE hUcrtbase = NULL;
 		FARPROC func = NULL;
@@ -218,7 +229,7 @@
 		LPSTR pFunc;
 		BOOL foundRet = FALSE;
 		BOOL foundPio = FALSE;
-		ioinfo ** ret = NULL;
+		struct ioinfo ** ret = NULL;
 
 	#if _DEBUG
 		hUcrtbase = LoadLibrary(TEXT("ucrtbased.dll"));
@@ -290,9 +301,9 @@
 	#if _WIN64
 		DWORD rel = *(DWORD*)(pFunc);
 		LPSTR rip = pFunc + sizeof(DWORD);
-		ret = (ioinfo**)(rip + rel);
+		ret = (struct ioinfo**)(rip + rel);
 	#else
-		ret = *(ioinfo***)(pFunc);
+		ret = *(struct ioinfo***)(pFunc);
 	#endif
 
 		{
@@ -329,7 +340,7 @@
 	 * Control structure for lowio file handles
 	 */
 
-	typedef struct {
+	typedef struct ioinfo {
 		#if _MSC_VER >= 1300
 		intptr_t osfhnd;/* underlying OS file HANDLE */
 		#else
@@ -387,7 +398,7 @@
 #if defined(__cplusplus)
 	extern "C" {
 #endif
-	extern __declspec(dllimport) ioinfo * __pioinfo[];
+	extern __declspec(dllimport) struct ioinfo * __pioinfo[];
 #if defined(__cplusplus)
 	}
 #endif
@@ -398,7 +409,7 @@
 #if defined(__cplusplus)
 	extern "C" {
 #endif
-	extern _CRTIMP ioinfo * __pioinfo[];
+	extern _CRTIMP struct ioinfo * __pioinfo[];
 #if defined(__cplusplus)
 	}
 #endif

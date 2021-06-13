@@ -14,7 +14,7 @@
 #define USHRT_MAX 0x7FFF
 #endif
 
-#if _MSC_VER < 1000
+#if _MSC_VER && _MSC_VER < 1000
 typedef size_t SIZE_T;
 #endif
 
@@ -658,7 +658,14 @@ static BOOL getLpReserved2(LPBYTE FAR *lpReserved2, WORD FAR *cbReserved2, WORD 
 #if defined(__LCC__) && defined(WIN32)
 	lastHandle = FOPEN_MAX;
 #elif defined (__MINGW32__) && defined (__MSVCRT__)
-	lastHandle = _nhandle;
+	lastHandle = 0;
+	for(lastHandle = IOINFO_ARRAYS; lastHandle > 0 && __pioinfo[lastHandle - 1] == NULL; lastHandle--)
+	{
+	}
+	if(lastHandle > 0)
+	{
+		lastHandle = ((lastHandle - 1) << IOINFO_L2E) + IOINFO_ARRAY_ELTS - 1;
+	}
 #elif _MSC_VER
 	#if _MSC_VER >= 1000
 		#if _MSC_VER >= 1900

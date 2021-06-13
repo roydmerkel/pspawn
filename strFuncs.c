@@ -4,6 +4,22 @@
 #define MIN(A, B) (((A) < (B)) ? (A) : (B))
 #endif
 
+#if _MSC_VER && _MSC_VER < 1000
+typedef size_t SIZE_T;
+#endif
+
+#ifndef CSTR_LESS_THAN
+#define CSTR_LESS_THAN            1           // string 1 less than string 2
+#endif
+
+#ifndef CSTR_EQUAL
+#define CSTR_EQUAL                2           // string 1 equal to string 2
+#endif
+
+#ifndef CSTR_GREATER_THAN
+#define CSTR_GREATER_THAN         3           // string 1 greater than string 2
+#endif
+
 LPVOID lmemcpy(register LPVOID destination, register LPVOID source, size_t mem)
 {
 	register LPBYTE destByte = (LPBYTE)destination;
@@ -81,60 +97,109 @@ LPCSTR CONST FAR * GetEnvironmentStringsArrayA()
 	SIZE_T mcharStrSize = 0;
 	LPCSTR FAR * res = NULL;
 	LPWCH penv = NULL;
+	LPCH penva = NULL;
 	LPWCH env = GetEnvironmentStringsW();
+	LPCH enva = (env == NULL) ? GetEnvironmentStrings() : NULL;
 	LPSTR strPtr = NULL;
 	LPSTR FAR *ptrPtr = NULL;
 
-	if(env == NULL)
+	if(env != NULL)
 	{
-		return NULL;
-	}
-
-	for(penv = env; *penv || (!*penv && (penv == env || *(penv - 1))); penv++)
-	{
-		strSize++;
-		if(!(*penv))
+		for(penv = env; *penv || (!*penv && (penv == env || *(penv - 1))); penv++)
 		{
-			count++;
+			strSize++;
+			if(!(*penv))
+			{
+				count++;
+			}
 		}
-	}
 
-	mcharStrSize = WideCharToMultiByte(CP_ACP,0, env, (int)strSize, NULL, 0, NULL, NULL);
+		mcharStrSize = WideCharToMultiByte(CP_ACP,0, env, (int)strSize, NULL, 0, NULL, NULL);
 
-	bufSize = (count + 1) * sizeof (LPCSTR) + (mcharStrSize + 1) * sizeof (CHAR);
+		bufSize = (count + 1) * sizeof (LPCSTR) + (mcharStrSize + 1) * sizeof (CHAR);
 
-	res = LocalAlloc(LPTR, bufSize);
+		res = LocalAlloc(LPTR, bufSize);
 
-	if(!res)
-	{
-		FreeEnvironmentStringsW(env);
-		return NULL;
-	}
-
-	ptrPtr = (LPSTR FAR *)res;
-	strPtr = (LPSTR)(ptrPtr + (count + 1));
-
-	if(!WideCharToMultiByte(CP_ACP,0, env, (int)strSize, (LPSTR)strPtr, (int)(mcharStrSize) + 1, NULL, NULL))
-	{
-		FreeEnvironmentStringsW(env);
-		LocalFree((HLOCAL)res);
-		res = NULL;
-		return NULL;
-	}
-
-	for(; *strPtr != '\0';)
-	{
-		*ptrPtr = strPtr;
-		ptrPtr++;
-
-		while(*strPtr != '\0')
+		if(!res)
 		{
+			FreeEnvironmentStringsW(env);
+			return NULL;
+		}
+
+		ptrPtr = (LPSTR FAR *)res;
+		strPtr = (LPSTR)(ptrPtr + (count + 1));
+
+		if(!WideCharToMultiByte(CP_ACP,0, env, (int)strSize, (LPSTR)strPtr, (int)(mcharStrSize) + 1, NULL, NULL))
+		{
+			FreeEnvironmentStringsW(env);
+			LocalFree((HLOCAL)res);
+			res = NULL;
+			return NULL;
+		}
+
+		for(; *strPtr != '\0';)
+		{
+			*ptrPtr = strPtr;
+			ptrPtr++;
+
+			while(*strPtr != '\0')
+			{
+				*strPtr++;
+			}
 			*strPtr++;
 		}
-		*strPtr++;
+		FreeEnvironmentStringsW(env);
+
+		return res;
 	}
-	FreeEnvironmentStringsW(env);
-	return res;
+	else if(enva)
+	{
+		for(penva = enva; *penva || (!*penva && (penva == enva || *(penva - 1))); penva++)
+		{
+			strSize++;
+			if(!(*penva))
+			{
+				count++;
+			}
+		}
+
+		bufSize = (count + 1) * sizeof (LPCSTR) + (strSize + 1) * sizeof (CHAR);
+
+		res = LocalAlloc(LPTR, bufSize);
+
+		if(!res)
+		{
+			FreeEnvironmentStrings(enva);
+			return NULL;
+		}
+
+		ptrPtr = (LPSTR FAR *)res;
+		strPtr = (LPSTR)(ptrPtr + (count + 1));
+
+		for(penva = enva; *penva || (!*penva && (penva == enva || *(penva - 1))); penva++, strPtr++)
+		{
+			*strPtr = *penva;
+		}
+
+		strPtr = (LPSTR)(ptrPtr + (count + 1));
+
+		for(; *strPtr != '\0';)
+		{
+			*ptrPtr = strPtr;
+			ptrPtr++;
+
+			while(*strPtr != '\0')
+			{
+				*strPtr++;
+			}
+			*strPtr++;
+		}
+		FreeEnvironmentStrings(enva);
+
+		return res;
+	}
+
+	return NULL;
 }
 
 // CompareString and CompareStringW are undefined on NT 3.1
