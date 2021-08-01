@@ -32,57 +32,148 @@
 #define FTEXT           0x80    /* file handle is in text mode */
 
 #if defined(__LCC__) && defined(WIN32)
-	#if defined(__cplusplus)
-	extern "C" {
-	#endif
-		extern FILE (*_imp___iob)[];
-	#if defined(__cplusplus)
-	}
-	#endif
-	
-	#define _iob    (*_imp___iob)
-	
-	#define __iob(i) (&_iob[(i)])
-	
-	#define _osfhnd(i)  _get_osfhandle(i)
+	static char *_osfile = NULL;
+	static long *_osfhnd = NULL;
 
-	static int _osfile(int i)
+	#define _osfhnd(i)  ( findOSFileOSFHandle(), (_osfhnd) ? _osfhnd[i] : 0L )
+
+	#define _osfile(i)  ( findOSFileOSFHandle(), (_osfile) ? _osfile[i] : 0 )
+
+	static BOOL findOSFileOSFHandle(void)
 	{
-		int ret = 0;
-		int mode = -1;
-		int flags = 0;
-		mode = _setmode(i, O_BINARY);
-		
-		if(mode == -1)
-		{
-			return -1;
-		}
-		
-		_setmode(i, mode);
-		
-		if(mode & _O_TEXT)
-		{
-			ret |= FTEXT;
-			ret |= FCRLF;
-		}
-		
-		if(mode & _O_NOINHERIT)
-		{
-			ret |= FNOINHERIT;
-		}
-		
-		flags = __iob(i)->_flag;
-		
-		if((flags & _IOAPPEND) || (mode & _O_APPEND))
-		{
-			ret |= FAPPEND;
-		}
-		
-		ret |= FOPEN;
+		HMODULE hCrtdll = NULL;
+		FARPROC pisatty = NULL;
+		FARPROC pget_osfhandle = NULL;
+		LPSTR pFuncStart = NULL;
+		LPSTR pFuncEnd = NULL;
+		LPSTR pFunc;
+		BOOL foundRet = FALSE;
+		BOOL foundPio = FALSE;
+		char *osfile = NULL;
+		HANDLE *osfhandle = NULL;
+		BOOL ret = FALSE;
 
+		if(_osfile != NULL && _osfhnd != NULL)
+		{
+			return TRUE;
+		}
+
+		hCrtdll = LoadLibrary(TEXT("crtdll.dll"));
+		if(hCrtdll)
+		{
+			pisatty = GetProcAddress(hCrtdll, "_isatty");
+			pget_osfhandle = GetProcAddress(hCrtdll, "_get_osfhandle");
+
+			if(pisatty)
+			{
+				foundRet = FALSE;
+				foundPio = FALSE;
+
+				/* and         eax,40h */
+				#define FUNC_CLEAR_STACK "\x83\xe0\x40"
+				/* ret */
+				#define FUNC_RET "\xC3"
+				#define CLEAR_STACK_PARAM_BYTES 0
+				/* mov         al,byte ptr [ecx+???h] */
+				#define PIOINFO_MARK "\x8A\x81"
+				/* mov         al,byte ptr [eax+???h] */
+				#define PIOINFO_MARK_2 "\x8A\x80"
+				pFuncStart = (LPSTR)pisatty;
+
+				for (pFuncEnd = pFuncStart + CLEAR_STACK_PARAM_BYTES + sizeof FUNC_CLEAR_STACK - 1; pFuncEnd < pFuncStart + 0x300; pFuncEnd++)
+				{
+					if (memcmp(pFuncEnd, FUNC_RET, sizeof FUNC_RET - 1) == 0 && memcmp(pFuncEnd - CLEAR_STACK_PARAM_BYTES - sizeof FUNC_CLEAR_STACK + 1, FUNC_CLEAR_STACK, sizeof FUNC_CLEAR_STACK - 1) == 0)
+					{
+						pFuncEnd += (sizeof FUNC_RET - 2);
+						foundRet = TRUE;
+						break;
+					}
+				}
+
+				if (foundRet)
+				{
+					for (pFunc = pFuncEnd; pFunc >= pFuncStart; pFunc--)
+					{
+						if (memcmp(pFunc, PIOINFO_MARK, sizeof PIOINFO_MARK - 1) == 0)
+						{
+							pFunc += (sizeof PIOINFO_MARK - 1);
+							foundPio = TRUE;
+							break;
+						}
+						else if (memcmp(pFunc, PIOINFO_MARK_2, sizeof PIOINFO_MARK_2 - 1) == 0)
+						{
+							pFunc += (sizeof PIOINFO_MARK_2 - 1);
+							foundPio = TRUE;
+							break;
+						}
+					}
+				}
+
+				#undef FUNC_CLEAR_STACK
+				#undef FUNC_RET
+				#undef CLEAR_STACK_PARAM_BYTES
+				#undef PIOINFO_MARK
+				if(foundPio)
+				{
+					osfile = *(char**)(pFunc);
+					_osfile = osfile;
+				}
+			}
+
+			if(pget_osfhandle)
+			{
+				foundRet = FALSE;
+				foundPio = FALSE;
+
+				/* mov         eax,0FFFFFFFFh */
+				#define FUNC_CLEAR_STACK "\xB8\xFF\xFF\xFF\xFF"
+				/* ret */
+				#define FUNC_RET "\xC3"
+				#define CLEAR_STACK_PARAM_BYTES 0
+				/* mov         al,byte ptr [ecx+???h] */
+				#define PIOINFO_MARK "\x8B\x04\x85"
+				pFuncStart = (LPSTR)pget_osfhandle;
+
+				for (pFuncEnd = pFuncStart + CLEAR_STACK_PARAM_BYTES + sizeof FUNC_CLEAR_STACK - 1; pFuncEnd < pFuncStart + 0x300; pFuncEnd++)
+				{
+					if (memcmp(pFuncEnd, FUNC_RET, sizeof FUNC_RET - 1) == 0 && memcmp(pFuncEnd - CLEAR_STACK_PARAM_BYTES - sizeof FUNC_CLEAR_STACK + 1, FUNC_CLEAR_STACK, sizeof FUNC_CLEAR_STACK - 1) == 0)
+					{
+						pFuncEnd += (sizeof FUNC_RET - 2);
+						foundRet = TRUE;
+						break;
+					}
+				}
+
+				if (foundRet)
+				{
+					for (pFunc = pFuncEnd; pFunc >= pFuncStart; pFunc--)
+					{
+						if (memcmp(pFunc, PIOINFO_MARK, sizeof PIOINFO_MARK - 1) == 0)
+						{
+							pFunc += (sizeof PIOINFO_MARK - 1);
+							foundPio = TRUE;
+							break;
+						}
+					}
+				}
+
+				#undef FUNC_CLEAR_STACK
+				#undef FUNC_RET
+				#undef CLEAR_STACK_PARAM_BYTES
+				#undef PIOINFO_MARK
+				if(foundPio)
+				{
+					osfhandle = *(HANDLE**)(pFunc);
+					_osfhnd = osfhandle;
+				}
+			}
+
+			FreeLibrary(hCrtdll);
+		}
+
+		ret = (osfile != NULL && osfhandle != NULL);
 		return ret;
 	}
-	
 #elif defined (__MINGW32__) && defined (__MSVCRT__)
 	// fcntl(fileno, F_GETFL) for Microsoft library
 	// 'semi-documented' defines:
