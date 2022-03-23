@@ -762,9 +762,9 @@ static BOOL getLpReserved2(LPBYTE FAR *lpReserved2, WORD FAR *cbReserved2, WORD 
 }
 
 HANDLE __cdecl pwspawnvpe(
-		FILE **ppipestdin,
-		FILE **ppipestdout,
-		FILE **ppipestderr,
+		HANDLE *ppipestdin,
+		HANDLE *ppipestdout,
+		HANDLE *ppipestderr,
 		LPCWSTR filename,
 		LPCWSTR const FAR *argv,
 		LPCWSTR const FAR *envp
@@ -826,9 +826,9 @@ HANDLE __cdecl pwspawnvpe(
 }
 
 HANDLE __cdecl pwspawnvp(
-		FILE **ppipestdin,
-		FILE **ppipestdout,
-		FILE **ppipestderr,
+		HANDLE *ppipestdin,
+		HANDLE *ppipestdout,
+		HANDLE *ppipestderr,
 		LPCWSTR filename,
 		LPCWSTR const FAR *argv
 		)
@@ -837,9 +837,9 @@ HANDLE __cdecl pwspawnvp(
 }
 
 HANDLE __cdecl pwspawnve(
-		FILE **ppipestdin,
-		FILE **ppipestdout,
-		FILE **ppipestderr,
+		HANDLE *ppipestdin,
+		HANDLE *ppipestdout,
+		HANDLE *ppipestderr,
 		LPCWSTR filename,
 		LPCWSTR const FAR *argv,
 		LPCWSTR const FAR *envp
@@ -907,14 +907,14 @@ HANDLE __cdecl pwspawnve(
 
 	if(ppipestdin)
 	{
-		if (! CreatePipe(&g_hChildStd_IN_Rd, &g_hChildStd_IN_Wr, &saAttr, 0)) 
+		if (! CreatePipe(&g_hChildStd_IN_Rd, &g_hChildStd_IN_Wr, &saAttr, 32767)) 
 		{
 			LocalFree(lpReserved2);
 			lpReserved2 = NULL;
 			return INVALID_HANDLE_VALUE;
 		}
 
-		if (pSetHandleInformation && ! (*pSetHandleInformation)(g_hChildStd_IN_Wr, HANDLE_FLAG_INHERIT, 0) && GetLastError() != ERROR_CALL_NOT_IMPLEMENTED )
+		if (pSetHandleInformation && ! (*pSetHandleInformation)(g_hChildStd_IN_Rd, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT) && GetLastError() != ERROR_CALL_NOT_IMPLEMENTED )
 		{
 			LocalFree(lpReserved2);
 			lpReserved2 = NULL;
@@ -934,7 +934,7 @@ HANDLE __cdecl pwspawnve(
 
 	if(ppipestdout)
 	{
-		if ( ! CreatePipe(&g_hChildStd_OUT_Rd, &g_hChildStd_OUT_Wr, &saAttr, 0) ) 
+		if ( ! CreatePipe(&g_hChildStd_OUT_Rd, &g_hChildStd_OUT_Wr, &saAttr, 32767) ) 
 		{
 			LocalFree(lpReserved2);
 			lpReserved2 = NULL;
@@ -946,7 +946,7 @@ HANDLE __cdecl pwspawnve(
 			return INVALID_HANDLE_VALUE;
 		}
 
-		if (pSetHandleInformation && ! (pSetHandleInformation)(g_hChildStd_OUT_Rd, HANDLE_FLAG_INHERIT, 0) && GetLastError() != ERROR_CALL_NOT_IMPLEMENTED )
+		if (pSetHandleInformation && ! (pSetHandleInformation)(g_hChildStd_OUT_Wr, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT) && GetLastError() != ERROR_CALL_NOT_IMPLEMENTED )
 		{
 			LocalFree(lpReserved2);
 			lpReserved2 = NULL;
@@ -971,7 +971,7 @@ HANDLE __cdecl pwspawnve(
 
 	if(ppipestderr)
 	{
-		if ( ! CreatePipe(&g_hChildStd_ERR_Rd, &g_hChildStd_ERR_Wr, &saAttr, 0) ) 
+		if ( ! CreatePipe(&g_hChildStd_ERR_Rd, &g_hChildStd_ERR_Wr, &saAttr, 32767) ) 
 		{
 			LocalFree(lpReserved2);
 			lpReserved2 = NULL;
@@ -988,7 +988,7 @@ HANDLE __cdecl pwspawnve(
 			return INVALID_HANDLE_VALUE;
 		}
 
-		if (pSetHandleInformation && ! (*pSetHandleInformation)(g_hChildStd_ERR_Rd, HANDLE_FLAG_INHERIT, 0) && GetLastError() != ERROR_CALL_NOT_IMPLEMENTED )
+		if (pSetHandleInformation && ! (*pSetHandleInformation)(g_hChildStd_ERR_Wr, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT) && GetLastError() != ERROR_CALL_NOT_IMPLEMENTED )
 		{
 			LocalFree(lpReserved2);
 			lpReserved2 = NULL;
@@ -1054,87 +1054,27 @@ HANDLE __cdecl pwspawnve(
 
 	if(ppipestdin)
 	{
-		int pf = -1;
-		FILE *f = NULL;
 		CloseHandle(g_hChildStd_IN_Rd);
-		pf = _open_osfhandle((intptr_t)g_hChildStd_IN_Wr, _O_WRONLY | _O_WTEXT);
-		if(pf >= 0)
-		{
-			f = _wfdopen(pf, L"w");
-			if(f != NULL)
-			{
-				*ppipestdin = f;
-			}
-			else
-			{
-				*ppipestdin = NULL;
-				_close(pf);
-			}
-		}
-		else
-		{
-			*ppipestdin = NULL;
-			CloseHandle(g_hChildStd_IN_Wr);
-		}
+		*ppipestdin = g_hChildStd_IN_Wr;
 	}
 	if(ppipestdout)
 	{
-		int pf = -1;
-		FILE *f = NULL;
 		CloseHandle(g_hChildStd_OUT_Wr);
-		pf = _open_osfhandle((intptr_t)g_hChildStd_OUT_Rd, _O_RDONLY | _O_WTEXT);
-		if(pf >= 0)
-		{
-			f = _wfdopen(pf, L"r");
-			if(f != NULL)
-			{
-				*ppipestdout = f;
-			}
-			else
-			{
-				*ppipestdout = NULL;
-				_close(pf);
-			}
-		}
-		else
-		{
-			*ppipestdout = NULL;
-			CloseHandle(g_hChildStd_OUT_Rd);
-		}
+		*ppipestdout = g_hChildStd_OUT_Rd;
 	}
 	if(ppipestderr)
 	{
-		int pf = -1;
-		FILE *f = NULL;
 		CloseHandle(g_hChildStd_ERR_Wr);
-		pf = _open_osfhandle((intptr_t)g_hChildStd_ERR_Rd, _O_RDONLY | _O_WTEXT);
-		if(pf >= 0)
-		{
-			f = _wfdopen(pf, L"r");
-			if(f != NULL)
-			{
-				*ppipestderr = f;
-			}
-			else
-			{
-				*ppipestderr = NULL;
-				_close(pf);
-			}
-		}
-		else
-		{
-			*ppipestderr = NULL;
-			CloseHandle(g_hChildStd_ERR_Rd);
-		}
+		*ppipestderr = g_hChildStd_ERR_Rd;
 	}
 
 	return processInformation.hProcess;
 }
 
 HANDLE __cdecl pwspawnv(
-		FILE **ppipestdin,
-		FILE **ppipestdout,
-		FILE **ppipestderr,
+		HANDLE *ppipestdin,
+		HANDLE *ppipestdout,
+		HANDLE *ppipestderr,
 		LPCWSTR filename,
 		LPCWSTR const FAR *argv
 		)
@@ -1143,9 +1083,9 @@ HANDLE __cdecl pwspawnv(
 }
 
 HANDLE __cdecl pwspawnlpe (
-        FILE **ppipestdin,
-		FILE **ppipestdout,
-		FILE **ppipestderr,
+        HANDLE *ppipestdin,
+		HANDLE *ppipestdout,
+		HANDLE *ppipestderr,
         const LPCWSTR filename,
         const LPCWSTR arg0,
         ...
@@ -1178,9 +1118,9 @@ HANDLE __cdecl pwspawnlpe (
 }
 
 HANDLE __cdecl pwspawnlp (
-        FILE **ppipestdin,
-		FILE **ppipestdout,
-		FILE **ppipestderr,
+        HANDLE *ppipestdin,
+		HANDLE *ppipestdout,
+		HANDLE *ppipestderr,
         const LPCWSTR filename,
         const LPCWSTR arg0,
         ...
@@ -1211,9 +1151,9 @@ HANDLE __cdecl pwspawnlp (
 }
 
 HANDLE __cdecl pwspawnle (
-        FILE **ppipestdin,
-		FILE **ppipestdout,
-		FILE **ppipestderr,
+        HANDLE *ppipestdin,
+		HANDLE *ppipestdout,
+		HANDLE *ppipestderr,
         const LPCWSTR filename,
         const LPCWSTR arg0,
         ...
@@ -1246,9 +1186,9 @@ HANDLE __cdecl pwspawnle (
 }
 
 HANDLE __cdecl pwspawnl (
-        FILE **ppipestdin,
-		FILE **ppipestdout,
-		FILE **ppipestderr,
+        HANDLE *ppipestdin,
+		HANDLE *ppipestdout,
+		HANDLE *ppipestderr,
         const LPCWSTR filename,
         const LPCWSTR arg0,
         ...
