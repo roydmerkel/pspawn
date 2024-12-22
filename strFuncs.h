@@ -2,8 +2,8 @@
 #include <tchar.h>
 #include <wchar.h>
 
-LPCSTR CONST FAR * GetEnvironmentStringsArrayA();
-LPCWSTR CONST FAR * GetEnvironmentStringsArrayW();
+LPCSTR CONST FAR * GetEnvironmentStringsArrayA(void);
+LPCWSTR CONST FAR * GetEnvironmentStringsArrayW(void);
 
 #ifdef  UNICODE
 	#define GetEnvironmentStringsArray GetEnvironmentStringsArrayW

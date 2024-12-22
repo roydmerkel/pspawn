@@ -794,7 +794,7 @@ HANDLE __cdecl pspawnvpe(
 		pathPtr = path;
 #endif
 
-		while(nextPath(&pathPtr, buf, MAX_PATH + 1))
+		while(nextPath((LPCSTR *)(&pathPtr), buf, MAX_PATH + 1))
 		{
 			if(lstrlenA(buf) + lstrlenA(filename) <= MAX_PATH)
 			{

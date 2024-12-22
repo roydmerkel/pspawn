@@ -86,7 +86,7 @@ LPCWSTR CONST FAR * GetEnvironmentStringsArrayW()
 		*strPtr++;
 	}
 	FreeEnvironmentStringsW(env);
-	return res;
+	return (LPCWSTR CONST FAR *)res;
 }
 
 LPCSTR CONST FAR * GetEnvironmentStringsArrayA()
